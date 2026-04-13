@@ -1,0 +1,39 @@
+[package]
+name = "solmux"
+version = "0.1.0"
+edition = "2021"
+description = "Solana-native RPC router with per-method routing, slot lag awareness, and blockhash freshness validation"
+license = "MIT"
+
+[[bin]]
+name = "solmux"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+dashmap = "6"
+bs58 = "0.5"
+base64 = "0.22"
+anyhow = "1"
+thiserror = "1"
+rand = "0.8"
+parking_lot = "0.12"
+futures = "0.3"
+uuid = { version = "1", features = ["v4"] }
+tower-http = { version = "0.5", features = ["catch-panic"] }
+url = "2"
+bytes = "1"
+lru = "0.12"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

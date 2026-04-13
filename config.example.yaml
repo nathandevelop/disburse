@@ -1,0 +1,26 @@
+listen: "0.0.0.0:8899"
+metrics_listen: "0.0.0.0:9090"
+
+upstreams:
+  - name: helius
+    url: "https://mainnet.helius-rpc.com/?api-key=REPLACE_ME"
+  - name: triton
+    url: "https://your.triton-endpoint/REPLACE_ME"
+  - name: quicknode
+    url: "https://your.quicknode-endpoint/REPLACE_ME"
+
+routing:
+  latency_weight: 0.7
+  success_weight: 0.3
+  ewma_alpha: 0.2
+
+health:
+  check_interval_secs: 3
+  max_slot_lag: 10
+  max_blockhash_age_slots: 100
+  circuit_breaker_error_rate: 0.5
+  circuit_breaker_cooldown_secs: 30
+
+retries:
+  max_attempts: 3
+  retry_on_different_upstream: true

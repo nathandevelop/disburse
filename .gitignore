@@ -1,0 +1,11 @@
+/target
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Runtime config (commit config.example.yaml instead)
+config.yaml
+config.bench.yaml
+config.smoke.yaml
