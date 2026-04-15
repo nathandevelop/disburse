@@ -4,6 +4,8 @@ A correctness and performance layer for Solana RPC.
 
 Every serious Solana team pays for three or more RPC providers because no single one is reliable enough, and glues them together with hand-rolled failover. That is not enough. Read-heavy and write-heavy paths behave differently. Providers degrade unpredictably. Stale reads and stale blockhashes silently break production. `disburse` sits in front of your providers and makes those problems someone else's job.
 
+**Community:** jump into the [Discord](https://discord.gg/HQxCaE62wH) to ask questions, share what you're running, or just chat about Solana infra. New contributors welcome.
+
 ## What it does
 
 **Per-method routing.** Helius may be faster at `getProgramAccounts`. Triton may land `sendTransaction` better. `disburse` measures every `(provider, method)` pair and routes each call to whoever is actually fastest right now, with hysteresis so it does not oscillate between two close performers.
