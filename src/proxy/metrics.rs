@@ -80,12 +80,12 @@ impl Default for Metrics {
 pub async fn handle_metrics(State(state): State<AppState>) -> impl IntoResponse {
     let mut out = String::new();
 
-    out.push_str("# HELP solmux_requests_total Total RPC requests routed.\n");
-    out.push_str("# TYPE solmux_requests_total counter\n");
+    out.push_str("# HELP disburse_requests_total Total RPC requests routed.\n");
+    out.push_str("# TYPE disburse_requests_total counter\n");
     for entry in state.metrics.requests.iter() {
         let (upstream, method, status) = entry.key();
         out.push_str(&format!(
-            "solmux_requests_total{{upstream=\"{}\",method=\"{}\",status=\"{}\"}} {}\n",
+            "disburse_requests_total{{upstream=\"{}\",method=\"{}\",status=\"{}\"}} {}\n",
             upstream,
             method,
             status,
@@ -93,14 +93,14 @@ pub async fn handle_metrics(State(state): State<AppState>) -> impl IntoResponse 
         ));
     }
 
-    out.push_str("# HELP solmux_request_duration_ms Request duration in milliseconds.\n");
-    out.push_str("# TYPE solmux_request_duration_ms histogram\n");
+    out.push_str("# HELP disburse_request_duration_ms Request duration in milliseconds.\n");
+    out.push_str("# TYPE disburse_request_duration_ms histogram\n");
     for entry in state.metrics.duration_buckets.iter() {
         let (upstream, method) = entry.key();
         let arr = entry.value();
         for (i, b) in BUCKETS_MS.iter().enumerate() {
             out.push_str(&format!(
-                "solmux_request_duration_ms_bucket{{upstream=\"{}\",method=\"{}\",le=\"{}\"}} {}\n",
+                "disburse_request_duration_ms_bucket{{upstream=\"{}\",method=\"{}\",le=\"{}\"}} {}\n",
                 upstream,
                 method,
                 b,
@@ -108,7 +108,7 @@ pub async fn handle_metrics(State(state): State<AppState>) -> impl IntoResponse 
             ));
         }
         out.push_str(&format!(
-            "solmux_request_duration_ms_bucket{{upstream=\"{}\",method=\"{}\",le=\"+Inf\"}} {}\n",
+            "disburse_request_duration_ms_bucket{{upstream=\"{}\",method=\"{}\",le=\"+Inf\"}} {}\n",
             upstream,
             method,
             arr[10].load(Ordering::Relaxed)
@@ -126,61 +126,61 @@ pub async fn handle_metrics(State(state): State<AppState>) -> impl IntoResponse 
             .map(|s| s.load(Ordering::Relaxed))
             .unwrap_or(0);
         out.push_str(&format!(
-            "solmux_request_duration_ms_sum{{upstream=\"{}\",method=\"{}\"}} {}\n",
+            "disburse_request_duration_ms_sum{{upstream=\"{}\",method=\"{}\"}} {}\n",
             upstream, method, sum
         ));
         out.push_str(&format!(
-            "solmux_request_duration_ms_count{{upstream=\"{}\",method=\"{}\"}} {}\n",
+            "disburse_request_duration_ms_count{{upstream=\"{}\",method=\"{}\"}} {}\n",
             upstream, method, count
         ));
     }
 
-    out.push_str("# HELP solmux_upstream_slot_lag Slot lag behind the global tip.\n");
-    out.push_str("# TYPE solmux_upstream_slot_lag gauge\n");
+    out.push_str("# HELP disburse_upstream_slot_lag Slot lag behind the global tip.\n");
+    out.push_str("# TYPE disburse_upstream_slot_lag gauge\n");
     let tip = state.pool.tip_slot.load(Ordering::Relaxed);
     for u in &state.pool.upstreams {
         let lag = tip.saturating_sub(u.last_slot.load(Ordering::Relaxed));
         out.push_str(&format!(
-            "solmux_upstream_slot_lag{{upstream=\"{}\"}} {}\n",
+            "disburse_upstream_slot_lag{{upstream=\"{}\"}} {}\n",
             u.name, lag
         ));
     }
 
-    out.push_str("# HELP solmux_upstream_health Upstream health (1 healthy, 0 dropped).\n");
-    out.push_str("# TYPE solmux_upstream_health gauge\n");
+    out.push_str("# HELP disburse_upstream_health Upstream health (1 healthy, 0 dropped).\n");
+    out.push_str("# TYPE disburse_upstream_health gauge\n");
     for u in &state.pool.upstreams {
         let h = if u.is_dropped() { 0.0 } else { 1.0 };
         out.push_str(&format!(
-            "solmux_upstream_health{{upstream=\"{}\"}} {}\n",
+            "disburse_upstream_health{{upstream=\"{}\"}} {}\n",
             u.name, h
         ));
     }
 
     out.push_str(
-        "# HELP solmux_blockhash_rejections_total sendTransaction calls rejected for stale blockhash.\n",
+        "# HELP disburse_blockhash_rejections_total sendTransaction calls rejected for stale blockhash.\n",
     );
-    out.push_str("# TYPE solmux_blockhash_rejections_total counter\n");
+    out.push_str("# TYPE disburse_blockhash_rejections_total counter\n");
     out.push_str(&format!(
-        "solmux_blockhash_rejections_total {}\n",
+        "disburse_blockhash_rejections_total {}\n",
         state.metrics.blockhash_rejections.load(Ordering::Relaxed)
     ));
 
-    out.push_str("# HELP solmux_routing_decisions_total Selections made by the router per (upstream, method).\n");
-    out.push_str("# TYPE solmux_routing_decisions_total counter\n");
+    out.push_str("# HELP disburse_routing_decisions_total Selections made by the router per (upstream, method).\n");
+    out.push_str("# TYPE disburse_routing_decisions_total counter\n");
     for entry in state.metrics.routing_decisions.iter() {
         let (upstream, method) = entry.key();
         out.push_str(&format!(
-            "solmux_routing_decisions_total{{upstream=\"{}\",method=\"{}\"}} {}\n",
+            "disburse_routing_decisions_total{{upstream=\"{}\",method=\"{}\"}} {}\n",
             upstream,
             method,
             entry.value().load(Ordering::Relaxed)
         ));
     }
 
-    out.push_str("# HELP solmux_panics_total Handler panics caught by the tower layer.\n");
-    out.push_str("# TYPE solmux_panics_total counter\n");
+    out.push_str("# HELP disburse_panics_total Handler panics caught by the tower layer.\n");
+    out.push_str("# TYPE disburse_panics_total counter\n");
     out.push_str(&format!(
-        "solmux_panics_total {}\n",
+        "disburse_panics_total {}\n",
         state.metrics.panics.load(Ordering::Relaxed)
     ));
 

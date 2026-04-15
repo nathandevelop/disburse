@@ -1,12 +1,12 @@
 [package]
-name = "solmux"
+name = "disburse"
 version = "0.1.0"
 edition = "2021"
 description = "Solana-native RPC router with per-method routing, slot lag awareness, and blockhash freshness validation"
 license = "MIT"
 
 [[bin]]
-name = "solmux"
+name = "disburse"
 path = "src/main.rs"
 
 [dependencies]

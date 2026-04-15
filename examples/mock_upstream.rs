@@ -1,4 +1,4 @@
-// Tiny axum-based mock Solana upstream for benchmarking solmux without
+// Tiny axum-based mock Solana upstream for benchmarking disburse without
 // confounding Python-threading overhead. Responds to any POST with a static
 // JSON-RPC result.
 //

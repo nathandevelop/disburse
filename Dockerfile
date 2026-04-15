@@ -8,15 +8,15 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && echo "fn main(){}" > src/main.rs && \
     cargo build --release && \
-    rm -rf src target/release/solmux target/release/deps/solmux*
+    rm -rf src target/release/disburse target/release/deps/disburse*
 
 COPY src ./src
 RUN cargo build --release --locked && \
-    strip target/release/solmux
+    strip target/release/disburse
 
 FROM gcr.io/distroless/cc-debian12:nonroot
 WORKDIR /app
-COPY --from=builder /build/target/release/solmux /usr/local/bin/solmux
+COPY --from=builder /build/target/release/disburse /usr/local/bin/disburse
 COPY config.example.yaml /app/config.example.yaml
 
 # 8899 = JSON-RPC listener, 9090 = Prometheus
@@ -24,8 +24,8 @@ EXPOSE 8899 9090
 
 # Use the binary itself to healthcheck (distroless has no shell/curl).
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
-    CMD ["/usr/local/bin/solmux", "--healthcheck"]
+    CMD ["/usr/local/bin/disburse", "--healthcheck"]
 
 USER nonroot
-ENTRYPOINT ["/usr/local/bin/solmux"]
+ENTRYPOINT ["/usr/local/bin/disburse"]
 CMD ["--config", "/app/config.yaml"]

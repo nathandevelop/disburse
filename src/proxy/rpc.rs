@@ -25,7 +25,7 @@ pub async fn handle_rpc(
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Response {
-    // Honor client-provided trace IDs so solmux doesn't break existing distributed
+    // Honor client-provided trace IDs so disburse doesn't break existing distributed
     // tracing. Falls back to a fresh UUID.
     let trace_id = headers
         .get("x-trace-id")
@@ -91,15 +91,25 @@ async fn handle_single_raw(state: &AppState, req: Value) -> Response {
         Ok(ForwardResult::Ok {
             bytes,
             content_type,
+            upstream,
+            latency_ms,
         }) => {
+            access_log(&method, Some(&upstream), latency_ms, "ok");
             let mut resp = Response::new(axum::body::Body::from(bytes));
             let ct = content_type.unwrap_or_else(|| HeaderValue::from_static("application/json"));
             resp.headers_mut().insert("content-type", ct);
             resp
         }
-        Ok(ForwardResult::Err(v)) => Json(v).into_response(),
+        Ok(ForwardResult::Err {
+            error,
+            last_upstream,
+            latency_ms,
+        }) => {
+            access_log(&method, last_upstream.as_deref(), latency_ms, "error");
+            Json(error).into_response()
+        }
         Err(_) => {
-            warn!("request exceeded global deadline");
+            access_log(&method, None, deadline.as_secs_f64() * 1000.0, "deadline");
             Json(jsonrpc_error(
                 id,
                 ErrorCode::DeadlineExceeded,
@@ -125,17 +135,46 @@ async fn handle_single_parsed(state: &AppState, req: Value) -> Value {
 
     let deadline = Duration::from_millis(state.pool.config.retries.deadline_ms);
     match tokio::time::timeout(deadline, forward_core(state, &req, &id, &method)).await {
-        Ok(ForwardResult::Ok { bytes, .. }) => serde_json::from_slice::<Value>(&bytes)
-            .unwrap_or_else(|_| {
+        Ok(ForwardResult::Ok {
+            bytes,
+            upstream,
+            latency_ms,
+            ..
+        }) => {
+            access_log(&method, Some(&upstream), latency_ms, "ok");
+            serde_json::from_slice::<Value>(&bytes).unwrap_or_else(|_| {
                 jsonrpc_error(
                     id,
                     ErrorCode::UpstreamBadResponse,
                     "upstream returned non-JSON",
                 )
-            }),
-        Ok(ForwardResult::Err(v)) => v,
-        Err(_) => jsonrpc_error(id, ErrorCode::DeadlineExceeded, "request deadline exceeded"),
+            })
+        }
+        Ok(ForwardResult::Err {
+            error,
+            last_upstream,
+            latency_ms,
+        }) => {
+            access_log(&method, last_upstream.as_deref(), latency_ms, "error");
+            error
+        }
+        Err(_) => {
+            access_log(&method, None, deadline.as_secs_f64() * 1000.0, "deadline");
+            jsonrpc_error(id, ErrorCode::DeadlineExceeded, "request deadline exceeded")
+        }
     }
+}
+
+/// One structured log line per client request. Lands on stdout at INFO level.
+/// `trace_id` is automatically attached via the enclosing `rpc` span.
+fn access_log(method: &str, upstream: Option<&str>, latency_ms: f64, status: &str) {
+    tracing::info!(
+        method = %method,
+        upstream = %upstream.unwrap_or("-"),
+        latency_ms = latency_ms,
+        status = %status,
+        "request"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -147,28 +186,40 @@ enum ForwardResult {
     Ok {
         bytes: Bytes,
         content_type: Option<HeaderValue>,
+        upstream: String,
+        latency_ms: f64,
     },
     /// Retries exhausted — returns the last JSON-RPC error response we have.
-    Err(Value),
+    Err {
+        error: Value,
+        last_upstream: Option<String>,
+        latency_ms: f64,
+    },
 }
 
 async fn forward_core(state: &AppState, req: &Value, id: &Value, method: &str) -> ForwardResult {
     let cfg = &state.pool.config;
     let cooldown = Duration::from_secs(cfg.health.circuit_breaker_cooldown_secs);
+    let overall_start = Instant::now();
 
     let req_bytes = match serde_json::to_vec(req) {
         Ok(b) => b,
         Err(_) => {
-            return ForwardResult::Err(jsonrpc_error(
-                id.clone(),
-                ErrorCode::Internal,
-                "failed to serialize request",
-            ));
+            return ForwardResult::Err {
+                error: jsonrpc_error(
+                    id.clone(),
+                    ErrorCode::Internal,
+                    "failed to serialize request",
+                ),
+                last_upstream: None,
+                latency_ms: overall_start.elapsed().as_secs_f64() * 1000.0,
+            };
         }
     };
 
     let mut excluded: Vec<String> = Vec::new();
     let mut last_error: Option<Value> = None;
+    let mut last_upstream: Option<String> = None;
 
     for attempt in 0..cfg.retries.max_attempts {
         let (upstream, _permit, is_probe) = match select_and_admit(&state.pool, method, &excluded) {
@@ -178,6 +229,7 @@ async fn forward_core(state: &AppState, req: &Value, id: &Value, method: &str) -
         state
             .metrics
             .record_routing_decision(&upstream.name, method);
+        last_upstream = Some(upstream.name.clone());
 
         let outcome = fire_once(state, &upstream, method, &req_bytes, id).await;
         let (success, ok_output, error_value) = match outcome {
@@ -202,6 +254,8 @@ async fn forward_core(state: &AppState, req: &Value, id: &Value, method: &str) -
             return ForwardResult::Ok {
                 bytes,
                 content_type,
+                upstream: upstream.name.clone(),
+                latency_ms: overall_start.elapsed().as_secs_f64() * 1000.0,
             };
         }
 
@@ -212,13 +266,17 @@ async fn forward_core(state: &AppState, req: &Value, id: &Value, method: &str) -
         }
     }
 
-    ForwardResult::Err(last_error.unwrap_or_else(|| {
-        jsonrpc_error(
-            id.clone(),
-            ErrorCode::AllUpstreamsExhausted,
-            "no upstream available",
-        )
-    }))
+    ForwardResult::Err {
+        error: last_error.unwrap_or_else(|| {
+            jsonrpc_error(
+                id.clone(),
+                ErrorCode::AllUpstreamsExhausted,
+                "no upstream available",
+            )
+        }),
+        last_upstream,
+        latency_ms: overall_start.elapsed().as_secs_f64() * 1000.0,
+    }
 }
 
 /// The outcome of one attempt against one upstream. On success carries the

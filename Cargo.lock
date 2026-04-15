@@ -267,6 +267,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "disburse"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64",
+ "bs58",
+ "bytes",
+ "clap",
+ "dashmap",
+ "futures",
+ "lru",
+ "parking_lot",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "displaydoc"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1355,34 +1383,6 @@ checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "solmux"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "base64",
- "bs58",
- "bytes",
- "clap",
- "dashmap",
- "futures",
- "lru",
- "parking_lot",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 1.0.69",
- "tokio",
- "tower-http 0.5.2",
- "tracing",
- "tracing-subscriber",
- "url",
- "uuid",
 ]
 
 [[package]]

@@ -6,7 +6,7 @@
 
 use serde_json::{json, Value};
 
-/// solmux-specific JSON-RPC error codes.
+/// disburse-specific JSON-RPC error codes.
 #[derive(Debug, Clone, Copy)]
 pub enum ErrorCode {
     /// -32600: the client sent something we couldn't even parse as JSON-RPC.

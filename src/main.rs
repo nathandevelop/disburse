@@ -1,26 +1,14 @@
-//! solmux entry point: parses CLI/config, spawns health monitors, starts the
+//! disburse entry point: parses CLI/config, spawns health monitors, starts the
 //! axum servers for RPC and metrics, and handles graceful shutdown.
 
-mod config;
-mod error;
-mod proxy;
-mod routing;
-mod solana;
-mod upstream;
-
-use crate::config::Config;
-use crate::proxy::{app, metrics_app, AppState, Metrics};
-use crate::routing::UpstreamPool;
-use crate::solana::BlockhashCache;
-use crate::upstream::spawn_health_monitors;
 use clap::Parser;
+use disburse::{app, build_state, metrics_app, spawn_health_monitors, Config};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
-#[command(name = "solmux", version, about = "Solana-native RPC router")]
+#[command(name = "disburse", version, about = "Solana-native RPC router")]
 struct Args {
     #[arg(long, default_value = "./config.yaml")]
     config: String,
@@ -57,20 +45,8 @@ async fn main() -> anyhow::Result<()> {
     }
     info!(config = %args.config, upstreams = cfg.upstreams.len(), "loaded config");
 
-    let pool = Arc::new(UpstreamPool::from_config(&cfg));
-    let blockhash_cache = Arc::new(BlockhashCache::new(
-        cfg.health.blockhash_warmup_secs,
-        cfg.health.blockhash_cache_size,
-    ));
-    let metrics = Arc::new(Metrics::new());
-
-    spawn_health_monitors(pool.clone(), blockhash_cache.clone());
-
-    let state = AppState {
-        pool: pool.clone(),
-        blockhash_cache: blockhash_cache.clone(),
-        metrics: metrics.clone(),
-    };
+    let state = build_state(&cfg);
+    spawn_health_monitors(state.pool.clone(), state.blockhash_cache.clone());
 
     let main_addr: SocketAddr = cfg.listen.parse()?;
     let metrics_addr: SocketAddr = cfg.metrics_listen.parse()?;
@@ -78,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let main_app = app(state.clone());
     let met_app = metrics_app(state);
 
-    info!(listen = %main_addr, metrics = %metrics_addr, "solmux starting");
+    info!(listen = %main_addr, metrics = %metrics_addr, "disburse starting");
 
     let main_listener = tokio::net::TcpListener::bind(main_addr).await?;
     let metrics_listener = tokio::net::TcpListener::bind(metrics_addr).await?;
@@ -95,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let _ = tokio::try_join!(main, met);
-    info!("solmux shut down");
+    info!("disburse shut down");
     Ok(())
 }
 
