@@ -73,11 +73,16 @@ impl Upstream {
         }
     }
 
-    /// Router-level visibility: `true` when the circuit is Open and we should
-    /// skip this upstream during scoring. HalfOpen is still eligible — the
-    /// single probe slot is enforced atomically inside `try_admit`.
+    /// Router-level visibility: `true` when the circuit is Open AND the
+    /// cooldown has not yet elapsed. Once the cooldown window expires the
+    /// upstream becomes eligible again (the next `try_admit` transitions
+    /// it to HalfOpen and sends a single probe). HalfOpen is eligible too —
+    /// the single probe slot is enforced atomically inside `try_admit`.
     pub fn is_dropped(&self) -> bool {
-        matches!(*self.circuit.read(), CircuitState::Open { .. })
+        match &*self.circuit.read() {
+            CircuitState::Open { until } => Instant::now() < *until,
+            _ => false,
+        }
     }
 
     /// Force the circuit open for `cooldown`. Called by the health loop when
